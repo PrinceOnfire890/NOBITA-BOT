@@ -1,201 +1,235 @@
 module.exports.config = {
-	name: "rank",
-	version: "2.0.0",
-	hasPermssion: 0,
-	credits: "𝐏𝐫𝐢𝐲𝐚𝐧𝐬𝐡 𝐑𝐚𝐣𝐩𝐮𝐭",
-	description: "View Member Rankings",
-	commandCategory: "Group",
-	usages: " [user] or [tag]",
-	cooldowns: 5,
-	dependencies: {
-		"fs-extra": "",
-		"path": "",
-		"jimp": "",
-		"node-superfetch": "",
-		"canvas": ""
-	}
+  name: "anti",
+  credits: "SHANKAR SUMAN",
+  hasPermission: 1,
+  dependencies: {
+    "imgbb-uploader": "",
+    "axios": "",
+    "fs": ""
+  },
+  description: "Ban something in the group",
+  usages: "< nickname/boximage/boxname >",
+  commandCategory: "Chat Box"
 };
 
-module.exports.makeRankCard = async (data) => {    
-    /*
-    * 
-    * Remake from Canvacord
-    * 
-    */
+const isBoolean = val => 'boolean' === typeof val;
 
-    const fs = global.nodemodule["fs-extra"];
-    const path = global.nodemodule["path"];
-	const Canvas = global.nodemodule["canvas"];
-	const request = global.nodemodule["node-superfetch"];
-	const __root = path.resolve(__dirname, "cache");
-	const PI = Math.PI;
+module.exports.run = async ({
+  api, event, args, Threads
+}) => {
+  try {
+    const {
+      threadID,
+      messageID,
+      senderID
+    } = event;
+    if (!await global.modelAntiSt.findOne({
+      where: {
+        threadID
+      }
+    }))
+      await global.modelAntiSt.create({
+        threadID, data: {}
+      });
 
-    const { id, name, rank, level, expCurrent, expNextLevel } = data;
 
-	Canvas.registerFont(__root + "/regular-font.ttf", {
-		family: "Manrope",
-		weight: "regular",
-		style: "normal"
-	});
-	Canvas.registerFont(__root + "/bold-font.ttf", {
-		family: "Manrope",
-		weight: "bold",
-		style: "normal"
-	});
+    try {
+      if (senderID == threadID)
+        return;
+      const data = (await global.modelAntiSt.findOne({
+        where: {
+          threadID
+        }
+      })).data;
+      if (!data.hasOwnProperty("antist")) {
+        data.antist = {};
+        await global.modelAntiSt.findOneAndUpdate({
+          threadID
+        }, {
+          data
+        });
+      }
+      if (!data.hasOwnProperty("antist_info")) {
+        data.antist_info = {};
+        await global.modelAntiSt.findOneAndUpdate({
+          threadID
+        }, {
+          data
+        });
+      }
 
-	const pathCustom = path.resolve(__dirname, "cache", "customrank");
-	var customDir = fs.readdirSync(pathCustom);
-	var dirImage = __root + "/rankcard.png";
-	customDir = customDir.map(item => item.replace(/\.png/g, ""));
+      const setting = args[0]?.toLowerCase();
+      const _switch = args[1]?.toLowerCase();
+      switch (setting) {
+        case 'nickname': {
+          if (_switch == "on")
+            data.antist.nickname = true;
+          else if (_switch == "off")
+            data.antist.nickname = false;
+          else
+            data.antist.nickname = !data.antist.nickname;
 
-	for (singleLimit of customDir) {
-		var limitRate = false;
-		const split = singleLimit.split(/-/g);
-		var min = parseInt(split[0]), max = parseInt((split[1]) ? split[1] : min);
-	
-		for (; min <= max; min++) {
-			if (level == min) {
-				limitRate = true;
-				break;
-			}
-		}
+          if (data.antist.nickname === true) {
+            const _info = data.antist_info.nicknames ? data.antist_info : (await api.getThreadInfo(threadID) || {});
+            const {
+              nicknames
+            } = _info;
+            if (!nicknames) return api.sendMessage("[ 𝗠𝗢𝗗𝗘 ] → An error occurred while executing the command", threadID);
+            data.antist_info.nicknames = nicknames;
+          } else {
+            data.antist_info.nicknames = null;
+          }
+          break;
+        }
+        case 'boximage': {
+          if (_switch == "on")
+            data.antist.boximage = true;
+          else if (_switch == "off")
+            data.antist.boximage = false;
+          else
+            data.antist.boximage = !(isBoolean(data.antist.boximage) ? data.antist.boximage : false);
 
-		if (limitRate == true) {
-			dirImage = pathCustom + `/${singleLimit}.png`;
-			break;
-		}
-	}
+          if (data.antist.boximage == true) {
+            const fs = global.nodemodule["fs"];
+            const axios = global.nodemodule["axios"];
+            const uploadIMG = global.nodemodule["imgbb-uploader"];
 
-	let rankCard = await Canvas.loadImage(dirImage);
-	const pathImg = __root + `/rank_${id}.png`;
-	
-	var expWidth = (expCurrent * 610) / expNextLevel;
-	if (expWidth > 610 - 19.5) expWidth = 610 - 19.5;
-	
-	let avatar = await request.get(`https://graph.facebook.com/${id}/picture?width=512&height=512&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`);
+            const _info = data.antist_info.imageSrc ? data.antist_info : (await api.getThreadInfo(threadID) || {});
+            const {
+              imageSrc
+            } = _info;
+            if (!imageSrc) return api.sendMessage("Your group has no image...", threadID);
+            const imageStream = (await axios.get(imageSrc, {
+              responseType: 'arraybuffer'
+            })).data;
+            const pathToImage = __dirname + `/cache/imgbb_antist_${Date.now()}.png`;
+            fs.writeFileSync(pathToImage, Buffer.from(imageStream, 'utf-8'));
+            const {
+              url
+            } = await uploadIMG("c4847250684c798013f3c7ee322d8692", pathToImage);
 
-	avatar = await this.circle(avatar.body);
+            fs.unlinkSync(pathToImage);
 
-	const canvas = Canvas.createCanvas(1000, 282);
-	const ctx = canvas.getContext("2d");
+            data.antist_info.imageSrc = url;
+          } else {
+            data.antist_info.imageSrc = null;
+          }
 
-	ctx.drawImage(rankCard, 0, 0, canvas.width, canvas.height);
-	ctx.drawImage(await Canvas.loadImage(avatar), 70, 75, 150, 150);
+          break;
+        }
+        case 'boxname': {
+          if (_switch == "on")
+            data.antist.boxname = true;
+          else if (_switch == "off")
+            data.antist.boxname = false;
+          else
+            data.antist.boxname = !(isBoolean(data.antist.boxname) ? data.antist.boxname : false);
 
-	ctx.font = `bold 36px Manrope`;
-	ctx.fillStyle = "#FFFFFF";
-	ctx.textAlign = "start";
-	ctx.fillText(name, 270, 164);
-	ctx.font = `42px Manrope`;
-	ctx.fillStyle = "#FF7F24";
-	ctx.textAlign = "center";
 
-	ctx.font = `bold 38px Manrope`;
-	ctx.fillStyle = "#FF0000";
-	ctx.textAlign = "end";
-	ctx.fillText(level, 934 - 68, 82);
-	ctx.fillStyle = "#FF0000";
-	ctx.fillText("Lv.", 934 - 55 - ctx.measureText(level).width - 10, 82);
+          if (data.antist.boxname === true) {
+            const _info = data.antist_info.name ? data.antist_info : (await api.getThreadInfo(threadID) || {});
+            const {
+              name
+            } = _info;
+            if (!name) return api.sendMessage("The group has no name", threadID);
+            data.antist_info.name = name;
+          } else {
+            data.antist_info.name = null;
+          }
 
-	ctx.font = `bold 39px Manrope`;
-	ctx.fillStyle = "#FF0000";
-	ctx.textAlign = "end";
-	ctx.fillText(rank, 934 - 55 - ctx.measureText(level).width - 16 - ctx.measureText(`Lv.`).width - 25, 82);
-	ctx.fillStyle = "#FF0000";
-	ctx.fillText("#", 934 - 55 - ctx.measureText(level).width - 16 - ctx.measureText(`Lv.`).width - 16 - ctx.measureText(rank).width - 16, 82);
+          break;
+        }
+        case "theme": {
+          if (_switch == "on")
+            data.antist.theme = true;
+          else if (_switch == "off")
+            data.antist.theme = false;
+          else
+            data.antist.theme = !(isBoolean(data.antist.theme) ? data.antist.theme : false);
 
-	ctx.font = `bold 40px Manrope`;
-	ctx.fillStyle = "#1874CD";
-	ctx.textAlign = "start";
-	ctx.fillText("/ " + expNextLevel, 710 + ctx.measureText(expCurrent).width + 10, 164);
-	ctx.fillStyle = "#00BFFF";
-	ctx.fillText(expCurrent, 710, 164);
+          if (!global.client.antistTheme)
+            global.client.antistTheme = {};
+          if (data.antist.theme === true)
+            return api.sendMessage('Please go to group settings and choose a theme as the default theme', threadID, (err, info) => {
+              global.client.antistTheme[threadID] = {
+                threadID,
+                messageID: info.messageID,
+                author: senderID,
+                run: async function (themeID, accessibility_label) {
+                  delete global.client.antistTheme[threadID];
+                  const data = (await global.modelAntiSt.findOne({
+                    where: {
+                      threadID
+                    }
+                  })).data;
+                  if (!data.hasOwnProperty("antist")) {
+                    data.antist = {};
+                    await global.modelAntiSt.findOneAndUpdate({
+                      threadID
+                    }, {
+                      data
+                    });
+                  }
+                  if (!data.hasOwnProperty("antist_info")) {
+                    data.antist_info = {};
+                    await global.modelAntiSt.findOneAndUpdate({
+                      threadID
+                    }, {
+                      data
+                    });
+                  }
 
-	ctx.beginPath();
-	ctx.fillStyle = "#FFB90F";
-	ctx.arc(257 + 18.5, 147.5 + 18.5 + 36.25, 18.5, 1.5 * PI, 0.5 * PI, true);
-	ctx.fill();
-	ctx.fillRect(257 + 18.5, 147.5 + 36.25, expWidth, 37.5);
-	ctx.arc(257 + 18.5 + expWidth, 147.5 + 18.5 + 36.25, 18.75, 1.5 * PI, 0.5 * PI, false);
-	ctx.fill();
+                  data.antist.theme = true;
+                  data.antist_info.themeID = themeID;
+                  api.sendMessage('Default theme set to: ' + accessibility_label, threadID);
+                  await global.modelAntiSt.findOneAndUpdate({
+                    threadID
+                  }, {
+                    data
+                  });
+                }
+              };
+            });
+          break;
+        }
+        case "emoji": {
+          if (_switch == "on")
+            data.antist.emoji = true;
+          else if (_switch == "off")
+            data.antist.emoji = false;
+          else
+            data.antist.emoji = !(isBoolean(data.antist.emoji) ? data.antist.emoji : false);
 
-	const imageBuffer = canvas.toBuffer();
-	fs.writeFileSync(pathImg, imageBuffer);
-	return pathImg;
-}
-module.exports.circle = async (image) => {
-    const jimp = global.nodemodule["jimp"];
-	image = await jimp.read(image);
-	image.circle();
-	return await image.getBufferAsync("image/png");
-}
 
-module.exports.expToLevel = (point) => {
-	if (point < 0) return 0;
-	return Math.floor((Math.sqrt(1 + (4 * point) / 3) + 1) / 2);
-}
+          if (data.antist.emoji === true) {
+            const _info = data.antist_info.emoji ? data.antist_info : (await api.getThreadInfo(threadID) || {});
+            const {
+              emoji
+            } = _info;
+            data.antist_info.emoji = emoji;
+          } else {
+            data.antist_info.emoji = null;
+          }
 
-module.exports.levelToExp = (level) => {
-	if (level <= 0) return 0;
-	return 3 * level * (level - 1);
-}
+          break;
+        }
 
-module.exports.getInfo = async (uid, Currencies) => {
-	let point = (await Currencies.getData(uid)).exp;
-	const level = this.expToLevel(point);
-	const expCurrent = point - this.levelToExp(level);
-	const expNextLevel = this.levelToExp(level + 1) - this.levelToExp(level);
-	return { level, expCurrent, expNextLevel };
-}
+        default:
+          return api.sendMessage(`🛠==== [ 𝐌𝐎𝐃𝐄 ] ====🛠\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n• 𝗔𝗻𝘁𝗶 𝗯𝗼𝘅𝗻𝗮𝗺𝗲: 𝗕𝗮𝘁/𝗧𝗮𝗽 𝗰𝗼𝗺𝗺𝗮𝗻𝗱 𝘁𝗵𝗮𝘁 𝗮𝗿𝗲 𝘆𝗼𝘂 𝘁𝘆𝗽𝗶𝗻𝗴 𝗻𝗮𝗺𝗲\n• 𝗔𝗻𝘁𝗶 𝗯𝗼𝘅𝗶𝗺𝗮𝗴𝗲: 𝗕𝗮𝘁/𝗧𝗮𝗽 𝗰𝗼𝗺𝗺𝗮𝗻𝗱 𝘁𝗵𝗮𝘁 𝗮𝗿𝗲 𝘆𝗼𝘂 𝘁𝘆𝗽𝗶𝗻𝗴 𝗮𝗻𝘆 𝗵𝗲𝗹𝗽 𝗻𝗮𝗺𝗲\n• 𝗔𝗻𝘁𝗶 𝗻𝗶𝗰𝗸𝗻𝗮𝗺𝗲: 𝗕𝗮𝘁/𝗧𝗮𝗽 𝗰𝗼𝗺𝗺𝗮𝗻𝗱 𝘁𝗵𝗮𝘁 𝘁𝘆𝗽𝗲 𝗮 𝗯𝗶𝗲𝘁 𝗱𝗮𝗻𝗵 𝘁𝗵𝗮̀𝗻𝗵 𝘃𝗶𝗲̂𝗻\n• 𝗔𝗻𝘁𝗶 𝗲𝗺𝗼𝗷𝗶: 𝗕𝗮𝘁/𝘁𝗮̆́𝘁 𝗰𝗼𝗺𝗺𝗮𝗻𝗱 𝘁𝗵𝗮𝘁 𝘆𝗼𝘂 𝘁𝘆𝗽𝗲𝗱 𝗮𝗻 𝗲𝗺𝗼𝗷𝗶𝘀\n• 𝗔𝗻𝘁𝗶 𝘁𝗵𝗲𝗺𝗲: 𝗕𝗮𝘁/𝘁𝗮̆́𝘁 𝗰𝗼𝗺𝗺𝗮𝗻𝗱 𝘁𝗵𝗮𝘁 𝘆𝗼𝘂 𝘁𝘆𝗽𝗲 𝘁𝗵𝗲𝗺𝗲 𝗯𝗼𝘅`, threadID);
+      }
 
-module.exports.onLoad = async function () {
-	const { resolve } = global.nodemodule["path"];
-    const { existsSync, mkdirSync } = global.nodemodule["fs-extra"];
-    const { downloadFile } = global.utils;
-	const path = resolve(__dirname, "cache", "customrank");
-    if (!existsSync(path)) mkdirSync(path, { recursive: true });
-
-    if (!existsSync(resolve(__dirname, 'cache', 'regular-font.ttf'))) await downloadFile("https://raw.githubusercontent.com/catalizcs/storage-data/master/rank/fonts/regular-font.ttf", resolve(__dirname, 'cache', 'regular-font.ttf'));
-	if (!existsSync(resolve(__dirname, 'cache', 'bold-font.ttf'))) await downloadFile("https://raw.githubusercontent.com/catalizcs/storage-data/master/rank/fonts/bold-font.ttf", resolve(__dirname, 'cache', 'bold-font.ttf'));
-	if (!existsSync(resolve(__dirname, 'cache', 'rankcard.png'))) await downloadFile("https://raw.githubusercontent.com/catalizcs/storage-data/master/rank/rank_card/rankcard.png", resolve(__dirname, 'cache', 'rankcard.png'));
-}
-
-module.exports.run = async ({ event, api, args, Currencies, Users }) => {
-	const fs = global.nodemodule["fs-extra"];
-	
-	let dataAll = (await Currencies.getAll(["userID", "exp"]));
-	const mention = Object.keys(event.mentions);
-
-	dataAll.sort((a, b) => {
-		if (a.exp > b.exp) return -1;
-		if (a.exp < b.exp) return 1;
-	});
-
-	if (args.length == 0) {
-		const rank = dataAll.findIndex(item => parseInt(item.userID) == parseInt(event.senderID)) + 1;
-		const name = global.data.userName.get(event.senderID) || await Users.getNameUser(event.senderID);
-		if (rank == 0) return api.sendMessage("Error❌ Please try again in 5 seconds.", event.threadID, event.messageID);
-		const point = await this.getInfo(event.senderID, Currencies);
-		const timeStart = Date.now();
-		let pathRankCard = await this.makeRankCard({ id: event.senderID, name, rank, ...point })
-		return api.sendMessage({body: `${Date.now() - timeStart}`, attachment: fs.createReadStream(pathRankCard, {'highWaterMark': 128 * 1024}) }, event.threadID, () => fs.unlinkSync(pathRankCard), event.messageID);
-	}
-	if (mention.length == 1) {
-		const rank = dataAll.findIndex(item => parseInt(item.userID) == parseInt(mention[0])) + 1;
-		const name = global.data.userName.get(mention[0]) || await Users.getNameUser(mention[0]);
-		if (rank == 0) return api.sendMessage("Error❌ Please try again in 5 seconds.", event.threadID, event.messageID);
-		let point = await this.getInfo(mention[0], Currencies);
-		let pathRankCard = await this.makeRankCard({ id: mention[0], name, rank, ...point })
-		return api.sendMessage({ attachment: fs.createReadStream(pathRankCard) }, event.threadID, () => fs.unlinkSync(pathRankCard), event.messageID);
-	}
-	if (mention.length > 1) {
-		for (const userID of mention) {
-			const rank = dataAll.findIndex(item => parseInt(item.userID) == parseInt(userID)) + 1;
-			const name = global.data.userName.get(userID) || await Users.getNameUser(userID);
-			if (rank == 0) return api.sendMessage("Error❌ Please try again in 5 seconds.", event.threadID, event.messageID);
-			let point = await this.getInfo(userID, Currencies);
-			let pathRankCard = await this.makeRankCard({ id: userID, name, rank, ...point })
-			return api.sendMessage({ attachment: fs.createReadStream(pathRankCard) }, event.threadID, () => fs.unlinkSync(pathRankCard), event.messageID);
-		}
-	}
-}
+      await global.modelAntiSt.findOneAndUpdate({
+        threadID
+      }, {
+        data
+      });
+      return api.sendMessage(`[ 𝗠𝗢𝗗𝗘 ] → Anti mode ${setting}: ${data.antist[setting] ? 'On' : 'Off'}`, threadID);
+    } catch (e) {
+      console.log(e);
+      api.sendMessage("[ 𝗠𝗢𝗗𝗘 ] → An error occurred while executing the command", threadID);
+    }
+  }
+  catch (err) {
+    console.log(err)
+  }
+};
