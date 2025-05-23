@@ -1,6 +1,3 @@
-const fs = require("fs"),
-  path = __dirname + "/PREM-BABU/PREM-LOCK.json";
-
 module.exports.config = {
 name: "lock",
 version: "1.4.3",
